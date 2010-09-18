@@ -30,9 +30,6 @@
  */
 #include "linden_common.h"
 
-#include "apr_pools.h"
-#include "apr_dso.h"
-
 #include "lldir.h"
 #include "llimagej2c.h"
 #include "llmemtype.h"
@@ -46,8 +43,6 @@ typedef const char* (*EngineInfoLLImageJ2CFunction)();
 CreateLLImageJ2CFunction j2cimpl_create_func;
 DestroyLLImageJ2CFunction j2cimpl_destroy_func;
 EngineInfoLLImageJ2CFunction j2cimpl_engineinfo_func;
-apr_pool_t *j2cimpl_dso_memory_pool;
-apr_dso_handle_t *j2cimpl_dso_handle;
 
 //Declare the prototype for theses functions here, their functionality
 //will be implemented in other files which define a derived LLImageJ2CImpl
@@ -56,115 +51,6 @@ apr_dso_handle_t *j2cimpl_dso_handle;
 LLImageJ2CImpl* fallbackCreateLLImageJ2CImpl();
 void fallbackDestroyLLImageJ2CImpl(LLImageJ2CImpl* impl);
 const char* fallbackEngineInfoLLImageJ2CImpl();
-
-//static
-//Loads the required "create", "destroy" and "engineinfo" functions needed
-void LLImageJ2C::openDSO()
-{
-	//attempt to load a DSO and get some functions from it
-	std::string dso_name;
-	std::string dso_path;
-
-	bool all_functions_loaded = false;
-	apr_status_t rv;
-
-#if LL_WINDOWS
-	dso_name = "llkdu.dll";
-#elif LL_DARWIN
-	dso_name = "libllkdu.dylib";
-#else
-	dso_name = "libllkdu.so";
-#endif
-
-	dso_path = gDirUtilp->findFile(dso_name,
-				       gDirUtilp->getAppRODataDir(),
-				       gDirUtilp->getExecutableDir());
-
-	j2cimpl_dso_handle      = NULL;
-	j2cimpl_dso_memory_pool = NULL;
-
-	//attempt to load the shared library
-	apr_pool_create(&j2cimpl_dso_memory_pool, NULL);
-	rv = apr_dso_load(&j2cimpl_dso_handle,
-					  dso_path.c_str(),
-					  j2cimpl_dso_memory_pool);
-
-	//now, check for success
-	if ( rv == APR_SUCCESS )
-	{
-		//found the dynamic library
-		//now we want to load the functions we're interested in
-		CreateLLImageJ2CFunction  create_func = NULL;
-		DestroyLLImageJ2CFunction dest_func = NULL;
-		EngineInfoLLImageJ2CFunction engineinfo_func = NULL;
-
-		rv = apr_dso_sym((apr_dso_handle_sym_t*)&create_func,
-						 j2cimpl_dso_handle,
-						 "createLLImageJ2CKDU");
-		if ( rv == APR_SUCCESS )
-		{
-			//we've loaded the create function ok
-			//we need to delete via the DSO too
-			//so lets check for a destruction function
-			rv = apr_dso_sym((apr_dso_handle_sym_t*)&dest_func,
-							 j2cimpl_dso_handle,
-						       "destroyLLImageJ2CKDU");
-			if ( rv == APR_SUCCESS )
-			{
-				//we've loaded the destroy function ok
-				rv = apr_dso_sym((apr_dso_handle_sym_t*)&engineinfo_func,
-						 j2cimpl_dso_handle,
-						 "engineInfoLLImageJ2CKDU");
-				if ( rv == APR_SUCCESS )
-				{
-					//ok, everything is loaded alright
-					j2cimpl_create_func  = create_func;
-					j2cimpl_destroy_func = dest_func;
-					j2cimpl_engineinfo_func = engineinfo_func;
-					all_functions_loaded = true;
-					LL_INFOS("LLKDU") << "Optional J2C renderer " << dso_name << " found at " << dso_path << LL_ENDL;
-				}
-			}
-		}
-	}
-
-	if ( !all_functions_loaded )
-	{
-		//something went wrong with the DSO or function loading..
-		//fall back onto our satefy impl creation function
-
-		// precious verbose debugging, sadly we can't use our
-		// 'llinfos' stream etc. this early in the initialisation seq.
-		// Want to bet? -- MC
-		if (dso_path.empty()) dso_path = "not found";
-		char errbuf[256];
-		LL_INFOS("LLKDU") << "failed to load syms from optional DSO " << dso_name 
-			<< " (" << dso_path << ")" << LL_ENDL;
-		apr_strerror(rv, errbuf, sizeof(errbuf));
-		LL_INFOS("LLKDU") << "error: " << rv << ", " << errbuf << LL_ENDL;
-		apr_dso_error(j2cimpl_dso_handle, errbuf, sizeof(errbuf));
-		LL_INFOS("LLKDU") << "dso-error: " << rv << ", " << errbuf << LL_ENDL;
-
-		if ( j2cimpl_dso_handle )
-		{
-			apr_dso_unload(j2cimpl_dso_handle);
-			j2cimpl_dso_handle = NULL;
-		}
-
-		if ( j2cimpl_dso_memory_pool )
-		{
-			apr_pool_destroy(j2cimpl_dso_memory_pool);
-			j2cimpl_dso_memory_pool = NULL;
-		}
-	}
-}
-
-//static
-void LLImageJ2C::closeDSO()
-{
-	if ( j2cimpl_dso_handle ) apr_dso_unload(j2cimpl_dso_handle);
-	if (j2cimpl_dso_memory_pool) apr_pool_destroy(j2cimpl_dso_memory_pool);
-}
 
 //static
 std::string LLImageJ2C::getEngineInfo()

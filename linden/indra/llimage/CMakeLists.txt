@@ -35,7 +35,6 @@ set(llimage_HEADER_FILES
     llimage.h
     llimagebmp.h
     llimagedxt.h
-    llimagej2c.h
     llimagejpeg.h
     llimagepng.h
     llimagetga.h

@@ -1580,7 +1580,7 @@ bool LLAppViewer::initThreads()
 	LLAppViewer::sImageDecodeThread = new LLImageDecodeThread(enable_threads && true);
 	LLAppViewer::sTextureCache = new LLTextureCache(enable_threads && true);
 	LLAppViewer::sTextureFetch = new LLTextureFetch(LLAppViewer::getTextureCache(), sImageDecodeThread, enable_threads && true);
-	LLImage::initClass(gSavedSettings.getBOOL("UseKDUIfAvailable"));
+	LLImage::initClass();
 
 	// *FIX: no error handling here!
 	return true;

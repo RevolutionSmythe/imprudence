@@ -308,7 +308,3 @@ add_custom_target(copy_win_libs ALL
     ${relwithdebinfo_appconfig_file} 
     ${debug_appconfig_file}
   )
-
-if(EXISTS ${internal_llkdu_path})
-    add_dependencies(copy_win_libs llkdu)
-endif(EXISTS ${internal_llkdu_path})
